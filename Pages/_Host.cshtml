@@ -1,0 +1,51 @@
+﻿@page "/"
+@namespace BlazorAuth2.Pages
+@using Microsoft.AspNetCore.Components.Web
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="~/" />
+    <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
+    <link href="css/site.css" rel="stylesheet" />
+    <link href="BlazorAuth2.styles.css" rel="stylesheet" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <component type="typeof(HeadOutlet)" render-mode="ServerPrerendered" />
+
+    <!-- FullCalendar i Flatpickr CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet">
+</head>
+
+<body>
+    <component type="typeof(App)" render-mode="ServerPrerendered" />
+
+    <div id="blazor-error-ui">
+        <environment include="Staging,Production">
+            Došlo je do pogreške. Aplikacija možda više neće odgovarati dok se ne osvježi.
+        </environment>
+        <environment include="Development">
+            Došlo je do neočekivane pogreške. Pogledajte konzolu preglednika za više informacija.
+        </environment>
+        <a href="" class="reload">Osvježi</a>
+        <a class="dismiss">🗙</a>
+    </div>
+
+    <!-- Blazor Server -->
+    <script src="_framework/blazor.server.js"></script>
+
+    <!-- FullCalendar i Flatpickr JavaScript -->
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
+    <!-- Naši JavaScript fajlovi -->
+    <script src="js/fullcalendar.js" defer></script>
+    <script src="js/flatpickr-config.js" defer></script>
+
+</body>
+</html>
+
+

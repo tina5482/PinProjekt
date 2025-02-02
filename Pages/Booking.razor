@@ -1,0 +1,128 @@
+﻿@page "/booking"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@using BlazorAuth2.Data
+@inject AppointmentService AppointmentService
+@inject IJSRuntime JSRuntime
+
+<h4>Rezervacija termina</h4>
+
+<div>
+    <label>Ime i Prezime:</label>
+    <input @bind="newAppointment.Name" placeholder="Unesite ime i prezime" />
+</div>
+
+<div>
+    <label>Usluga:</label>
+    <select @bind="newAppointment.ServiceType">
+        <option value="">-- Odaberite uslugu --</option>
+        @foreach (var service in Services)
+        {
+            <option value="@service">@service</option>
+        }
+    </select>
+</div>
+
+<div>
+    <label>Datum i vrijeme početka:</label>
+    <input id="appointmentDateTime" type="text" />
+</div>
+
+<button @onclick="SaveAppointment">Rezerviraj</button>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <p style="color: red;">@errorMessage</p>
+}
+
+@code {
+    private Appointment newAppointment = new();
+    private List<Appointment> Appointments = new();
+    private string? errorMessage = null;
+
+    private List<string> Services = new()
+    {
+        "Šminkanje",
+        "Lash Lift",
+        "Brow Lift",
+        "Ekstenzije trepavica"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Appointments = await AppointmentService.GetAppointmentsAsync() ?? new List<Appointment>();
+            await Task.Delay(100); // Osigurava da je DOM spreman
+            await RefreshFlatpickr();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Greška pri učitavanju termina: " + ex.Message;
+        }
+    }
+
+    private int GetServiceDuration(string serviceType)
+    {
+        return serviceType switch
+        {
+            "Šminkanje" => 120,
+            "Lash Lift" => 60,
+            "Brow Lift" => 60,
+            "Ekstenzije trepavica" => 90,
+            _ => 60
+        };
+    }
+
+    private async Task SaveAppointment()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(newAppointment.Name) || string.IsNullOrWhiteSpace(newAppointment.ServiceType))
+            {
+                errorMessage = "Molimo unesite ime, prezime i odaberite uslugu.";
+                return;
+            }
+
+            string selectedDateTimeString = await JSRuntime.InvokeAsync<string>("eval", "document.getElementById('appointmentDateTime').value");
+
+            if (!DateTime.TryParse(selectedDateTimeString, out DateTime selectedDateTime))
+            {
+                errorMessage = "Molimo odaberite ispravan datum i vrijeme.";
+                return;
+            }
+
+            newAppointment.AppointmentDateTime = selectedDateTime;
+
+            bool success = await AppointmentService.BookAppointmentAsync(newAppointment);
+            if (success)
+            {
+                Appointments = await AppointmentService.GetAppointmentsAsync() ?? new List<Appointment>();
+                await RefreshFlatpickr();
+                newAppointment = new Appointment();
+                errorMessage = string.Empty;
+            }
+            else
+            {
+                errorMessage = "Greška pri spremanju termina.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Greška pri rezervaciji: " + ex.Message;
+        }
+    }
+
+    private async Task RefreshFlatpickr()
+    {
+
+        var bookedAppointments = Appointments.Select(a => new
+        {
+            start = a.AppointmentDateTime.ToString("yyyy-MM-dd HH:mm"),
+            end = a.AppointmentDateTime.AddMinutes(GetServiceDuration(a.ServiceType)).ToString("yyyy-MM-dd HH:mm")
+        }).ToList();
+
+        await JSRuntime.InvokeVoidAsync("initFlatpickr", "#appointmentDateTime", bookedAppointments);
+    }
+}
+

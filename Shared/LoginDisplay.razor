@@ -1,0 +1,17 @@
+﻿<AuthorizeView>
+    <Authorized>
+        @if (context.User.Identity?.Name != null)
+        {
+            var displayName = context.User.Identity.Name.Split('@')[0]; // Uzimamo samo dio prije @
+            <a href="Identity/Account/Manage">Hello, @displayName!</a>
+        }
+        <form method="post" action="Identity/Account/Logout">
+            <button type="submit" class="nav-link btn btn-link">Log out</button>
+        </form>
+    </Authorized>
+    <NotAuthorized>
+        <a href="Identity/Account/Register">Register</a>
+        <a href="Identity/Account/Login">Log in</a>
+    </NotAuthorized>
+</AuthorizeView>
+

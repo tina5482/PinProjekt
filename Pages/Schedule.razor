@@ -1,0 +1,103 @@
+﻿@page "/schedule"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@using BlazorAuth2.Data
+@inject AppointmentService AppointmentService
+@inject IJSRuntime JSRuntime
+
+<h4>Pregled rasporeda</h4>
+
+<div id="calendar" style="width: 100%; height: 600px; max-width: 1200px; margin: auto;"></div>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <p style="color: red;">@errorMessage</p>
+}
+
+@code {
+    private List<Appointment> Appointments = new();
+    private string? errorMessage = null;
+    private DotNetObjectReference<Schedule>? dotNetRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            dotNetRef = DotNetObjectReference.Create(this);
+            Appointments = await AppointmentService.GetAppointmentsAsync() ?? new List<Appointment>();
+
+            if (Appointments.Any())
+            {
+                await Task.Delay(100); // Daje malo vremena za render
+                await RefreshCalendar();
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Greška pri učitavanju termina: " + ex.Message;
+        }
+    }
+
+    private int GetServiceDuration(string serviceType)
+    {
+        return serviceType switch
+        {
+            "Šminkanje" => 120,
+            "Lash Lift" => 60,
+            "Brow Lift" => 60,
+            "Ekstenzije trepavica" => 90,
+            _ => 60
+        };
+    }
+
+    private async Task RefreshCalendar()
+    {
+        if (Appointments == null || !Appointments.Any())
+        {
+            return;
+        }
+
+        var bookedAppointments = Appointments.Select(a => new
+        {
+            id = a.Id,
+            title = $"{a.Name} - {a.ServiceType} (by {a.CreatedBy})", // Dodano ime korisnika koji je zakazao termin
+            start = a.AppointmentDateTime.ToString("yyyy-MM-dd HH:mm"),
+            end = a.AppointmentDateTime.AddMinutes(GetServiceDuration(a.ServiceType)).ToString("yyyy-MM-dd HH:mm")
+        }).ToList();
+
+        await JSRuntime.InvokeVoidAsync("initFullCalendar", dotNetRef, bookedAppointments);
+    }
+
+    [JSInvokable]
+    public async Task CancelAppointment(int appointmentId)
+    {
+        try
+        {
+            bool confirmed = await JSRuntime.InvokeAsync<bool>("confirm", "Jeste li sigurni da želite otkazati ovaj termin?");
+            if (!confirmed)
+            {
+                return;
+            }
+
+            bool success = await AppointmentService.CancelAppointmentAsync(appointmentId);
+            if (success)
+            {
+                Appointments = await AppointmentService.GetAppointmentsAsync() ?? new List<Appointment>();
+                await RefreshCalendar();
+            }
+            else
+            {
+                errorMessage = "Greška: Termin nije pronađen.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Greška prilikom otkazivanja termina: " + ex.Message;
+        }
+    }
+
+    public void Dispose()
+    {
+        dotNetRef?.Dispose();
+    }
+}
