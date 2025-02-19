@@ -5,16 +5,16 @@
 @inject AppointmentService AppointmentService
 @inject IJSRuntime JSRuntime
 
-<h4>Rezervacija termina</h4>
+<h4>📅 Rezervacija termina</h4>
 
 <div>
     <label>Ime i Prezime:</label>
-    <input @bind="newAppointment.Name" placeholder="Unesite ime i prezime" />
+    <input @bind="newAppointment.Name" placeholder="Unesite ime i prezime" class="form-control" />
 </div>
 
 <div>
     <label>Usluga:</label>
-    <select @bind="newAppointment.ServiceType">
+    <select @bind="newAppointment.ServiceType" class="form-select">
         <option value="">-- Odaberite uslugu --</option>
         @foreach (var service in Services)
         {
@@ -25,14 +25,19 @@
 
 <div>
     <label>Datum i vrijeme početka:</label>
-    <input id="appointmentDateTime" type="text" />
+    <input id="appointmentDateTime" type="text" class="form-control" />
 </div>
 
-<button @onclick="SaveAppointment">Rezerviraj</button>
+<div>
+    <label>Bilješke (Napomena):</label>
+    <textarea @bind="newAppointment.Notes" placeholder="Unesite bilješke za termin (nije obavezno)" class="form-control"></textarea>
+</div>
+
+<button class="btn btn-primary mt-3" @onclick="SaveAppointment">✅ Rezerviraj</button>
 
 @if (!string.IsNullOrEmpty(errorMessage))
 {
-    <p style="color: red;">@errorMessage</p>
+    <p style="color: red;">⚠️ @errorMessage</p>
 }
 
 @code {
@@ -58,7 +63,7 @@
         }
         catch (Exception ex)
         {
-            errorMessage = "Greška pri učitavanju termina: " + ex.Message;
+            errorMessage = "❌ Greška pri učitavanju termina: " + ex.Message;
         }
     }
 
@@ -80,7 +85,7 @@
         {
             if (string.IsNullOrWhiteSpace(newAppointment.Name) || string.IsNullOrWhiteSpace(newAppointment.ServiceType))
             {
-                errorMessage = "Molimo unesite ime, prezime i odaberite uslugu.";
+                errorMessage = "❌ Molimo unesite ime i odaberite uslugu.";
                 return;
             }
 
@@ -88,7 +93,14 @@
 
             if (!DateTime.TryParse(selectedDateTimeString, out DateTime selectedDateTime))
             {
-                errorMessage = "Molimo odaberite ispravan datum i vrijeme.";
+                errorMessage = "❌ Molimo odaberite ispravan datum i vrijeme.";
+                return;
+            }
+
+            // Prevent booking in the past & on Sundays
+            if (selectedDateTime < DateTime.Now || selectedDateTime.DayOfWeek == DayOfWeek.Sunday)
+            {
+                errorMessage = "❌ Termin ne može biti u prošlosti ili na nedjelju.";
                 return;
             }
 
@@ -99,23 +111,22 @@
             {
                 Appointments = await AppointmentService.GetAppointmentsAsync() ?? new List<Appointment>();
                 await RefreshFlatpickr();
-                newAppointment = new Appointment();
+                newAppointment = new Appointment(); // Reset form
                 errorMessage = string.Empty;
             }
             else
             {
-                errorMessage = "Greška pri spremanju termina.";
+                errorMessage = "❌ Greška pri spremanju termina - nije moguće preklapanje ili su neispravni podaci.";
             }
         }
         catch (Exception ex)
         {
-            errorMessage = "Greška pri rezervaciji: " + ex.Message;
+            errorMessage = "❌ Greška pri rezervaciji: " + ex.Message;
         }
     }
 
     private async Task RefreshFlatpickr()
     {
-
         var bookedAppointments = Appointments.Select(a => new
         {
             start = a.AppointmentDateTime.ToString("yyyy-MM-dd HH:mm"),
@@ -125,4 +136,3 @@
         await JSRuntime.InvokeVoidAsync("initFlatpickr", "#appointmentDateTime", bookedAppointments);
     }
 }
-

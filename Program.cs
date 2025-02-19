@@ -14,7 +14,7 @@ namespace BlazorAuth2
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            //  1. Postavi konekciju na bazu
+            
             var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
                 ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -22,7 +22,7 @@ namespace BlazorAuth2
 
             builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-            //  2. Konfiguracija Identity
+            
             builder.Services.AddDefaultIdentity<IdentityUser>(options =>
             {
                 options.SignIn.RequireConfirmedAccount = false;
@@ -34,7 +34,9 @@ namespace BlazorAuth2
             builder.Services.AddScoped<AuthenticationStateProvider, RevalidatingIdentityAuthenticationStateProvider<IdentityUser>>();
             builder.Services.AddHttpContextAccessor();
 
-            //  3. Postavi konekciju za Booking (Appointments)
+
+
+          
             var appointmentConnectionString = builder.Configuration.GetConnectionString("AppointmentConnection")
             ?? throw new InvalidOperationException("Connection string 'AppointmentConnection' not found.");
 
@@ -45,7 +47,7 @@ namespace BlazorAuth2
 
             var app = builder.Build();
 
-            //  4. Configure HTTP pipeline
+          
             if (app.Environment.IsDevelopment())
             {
                 app.UseMigrationsEndPoint();
@@ -63,10 +65,10 @@ namespace BlazorAuth2
             app.UseAuthentication();
             app.UseAuthorization();
 
-            //  5. PRAVILNO REGISTRIRAJ RUTE (Bez UseEndpoints)
+         
             app.MapControllers();
             app.MapBlazorHub();
-            app.MapFallbackToPage("/_Host");  // Ovo je kljuèno!
+            app.MapFallbackToPage("/_Host");  
 
             app.Run();
         }

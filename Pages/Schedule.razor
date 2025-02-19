@@ -1,11 +1,8 @@
 ﻿@page "/schedule"
-@using Microsoft.AspNetCore.Authorization
-@attribute [Authorize]
-@using BlazorAuth2.Data
 @inject AppointmentService AppointmentService
 @inject IJSRuntime JSRuntime
 
-<h4>Pregled rasporeda</h4>
+<h4>📅 Pregled rasporeda</h4>
 
 <div id="calendar" style="width: 100%; height: 600px; max-width: 1200px; margin: auto;"></div>
 
@@ -24,48 +21,45 @@
         try
         {
             dotNetRef = DotNetObjectReference.Create(this);
-            Appointments = await AppointmentService.GetAppointmentsAsync() ?? new List<Appointment>();
-
-            if (Appointments.Any())
-            {
-                await Task.Delay(100); // Daje malo vremena za render
-                await RefreshCalendar();
-            }
+            await RefreshCalendar();
         }
         catch (Exception ex)
         {
-            errorMessage = "Greška pri učitavanju termina: " + ex.Message;
+            errorMessage = "❌ Greška pri učitavanju termina: " + ex.Message;
         }
     }
 
-    private int GetServiceDuration(string serviceType)
+    [JSInvokable]
+    public async Task RefreshCalendar()
     {
-        return serviceType switch
-        {
-            "Šminkanje" => 120,
-            "Lash Lift" => 60,
-            "Brow Lift" => 60,
-            "Ekstenzije trepavica" => 90,
-            _ => 60
-        };
-    }
-
-    private async Task RefreshCalendar()
-    {
-        if (Appointments == null || !Appointments.Any())
-        {
-            return;
-        }
+        Appointments = await AppointmentService.GetAppointmentsAsync();
 
         var bookedAppointments = Appointments.Select(a => new
         {
             id = a.Id,
-            title = $"{a.Name} - {a.ServiceType} (by {a.CreatedBy})", // Dodano ime korisnika koji je zakazao termin
+            title = $"{a.Name} - {a.ServiceType} (by {a.CreatedBy})",
             start = a.AppointmentDateTime.ToString("yyyy-MM-dd HH:mm"),
             end = a.AppointmentDateTime.AddMinutes(GetServiceDuration(a.ServiceType)).ToString("yyyy-MM-dd HH:mm")
         }).ToList();
 
         await JSRuntime.InvokeVoidAsync("initFullCalendar", dotNetRef, bookedAppointments);
+    }
+
+    [JSInvokable]
+    public async Task EditAppointment(int appointmentId, string newStart)
+    {
+        var appointment = Appointments.FirstOrDefault(a => a.Id == appointmentId);
+        if (appointment == null) return;
+
+        if (DateTime.TryParse(newStart, out DateTime startDateTime))
+        {
+            appointment.AppointmentDateTime = startDateTime;
+            bool success = await AppointmentService.UpdateAppointmentAsync(appointment);
+            if (success)
+            {
+                await RefreshCalendar();
+            }
+        }
     }
 
     [JSInvokable]
@@ -82,22 +76,29 @@
             bool success = await AppointmentService.CancelAppointmentAsync(appointmentId);
             if (success)
             {
-                Appointments = await AppointmentService.GetAppointmentsAsync() ?? new List<Appointment>();
+                Appointments = await AppointmentService.GetAppointmentsAsync();
                 await RefreshCalendar();
             }
             else
             {
-                errorMessage = "Greška: Termin nije pronađen.";
+                errorMessage = "❌ Greška: Termin nije pronađen.";
             }
         }
         catch (Exception ex)
         {
-            errorMessage = "Greška prilikom otkazivanja termina: " + ex.Message;
+            errorMessage = "❌ Greška prilikom otkazivanja termina: " + ex.Message;
         }
     }
 
-    public void Dispose()
+    private int GetServiceDuration(string serviceType)
     {
-        dotNetRef?.Dispose();
+        return serviceType switch
+        {
+            "Šminkanje" => 120,
+            "Lash Lift" => 60,
+            "Brow Lift" => 60,
+            "Ekstenzije trepavica" => 90,
+            _ => 60
+        };
     }
 }

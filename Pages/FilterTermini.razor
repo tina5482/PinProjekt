@@ -1,0 +1,280 @@
+﻿@page "/filter"
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@using BlazorAuth2.Data
+@inject AppointmentService AppointmentService
+@inject IJSRuntime JSRuntime
+
+<h3>🔍 Pronađi sljedeći slobodan termin</h3>
+
+<label>Odaberite uslugu:</label>
+<select @bind="selectedService" class="form-select">
+    <option value="">Odaberite uslugu</option>
+    <option value="Šminkanje">Šminkanje</option>
+    <option value="Lash Lift">Lash Lift</option>
+    <option value="Brow Lift">Brow Lift</option>
+    <option value="Ekstenzije trepavica">Ekstenzije trepavica</option>
+</select>
+
+<label class="mt-2">Odaberite djelatnika:</label>
+<select @bind="selectedEmployee" class="form-select">
+    <option value="">Svi djelatnici</option>
+    @foreach (var employee in employees)
+    {
+        <option value="@employee">@employee</option>
+    }
+</select>
+
+<button class="btn btn-primary mt-2" @onclick="() => FindNextAvailableSlot(true)">🔍 Pronađi slobodan termin</button>
+
+@if (!string.IsNullOrEmpty(nextAvailableSlot))
+{
+    <p class="mt-3 text-success">✅ Sljedeći slobodan termin za <strong>@selectedEmployee</strong>: <strong>@nextAvailableSlot</strong></p>
+    <button class="btn btn-secondary" @onclick="() => FindNextAvailableSlot(false)">➡️ Sljedeći</button>
+}
+else if (searchedNextAvailable)
+{
+    <p class="mt-3 text-danger">❌ Nema dostupnih termina u narednih 7 dana.</p>
+}
+
+<hr />
+
+<h3>📋 Lista zakazanih termina</h3>
+
+<label>Filtriraj po:</label>
+<select @bind="selectedFilter" class="form-select">
+    <option value="Name">Ime klijenta</option>
+    <option value="ServiceType">Vrsta usluge</option>
+    <option value="CreatedBy">Djelatnik</option>
+</select>
+
+<input @bind="filterValue" class="form-control mt-2" placeholder="Unesite vrijednost" />
+
+<button class="btn btn-primary mt-2" @onclick="FilterAppointments">🔍 Filtriraj</button>
+<button class="btn btn-secondary ms-2 mt-2" @onclick="ResetFilter">🔄 Poništi filter</button>
+
+@if (filteredAppointments.Any())
+{
+    <table class="table mt-3">
+        <thead>
+            <tr>
+                <th>Ime</th>
+                <th>Datum i Vrijeme</th>
+                <th>Vrsta usluge</th>
+                <th>Zakazao</th>
+                <th>Detalji</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var appointment in filteredAppointments)
+            {
+                <tr>
+                    <td>@appointment.Name</td>
+                    <td>@appointment.AppointmentDateTime.ToString("dd.MM.yyyy HH:mm")</td>
+                    <td>@appointment.ServiceType</td>
+                    <td>@appointment.CreatedBy</td>
+                    <td>
+                        <button class="btn btn-info btn-sm" @onclick="() => ShowDetails(appointment)">ℹ️ Više detalja</button>
+                        <button class="btn btn-warning btn-sm ms-2" @onclick="() => OpenEditNotesModal(appointment)">📝 Uredi Napomenu</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+else if (searchedFilter)
+{
+    <p class="text-center mt-3">Nema rezultata</p>
+}
+@if (selectedAppointment != null)
+{
+    <div class="modal-overlay" @onclick="CloseDetails"></div>
+    <div class="modal-content">
+        <h4>Detalji termina</h4>
+        <p><strong>Ime klijenta:</strong> @selectedAppointment.Name</p>
+        <p><strong>Datum i Vrijeme:</strong> @selectedAppointment.AppointmentDateTime.ToString("dd.MM.yyyy HH:mm")</p>
+        <p><strong>Usluga:</strong> @selectedAppointment.ServiceType</p>
+        <p><strong>Zakazao:</strong> @selectedAppointment.CreatedBy</p>
+        <p><strong>Napomena:</strong> @(string.IsNullOrWhiteSpace(selectedAppointment.Notes) ? "Nema detalja" : selectedAppointment.Notes)</p>
+        <button class="btn btn-secondary" @onclick="CloseDetails">Zatvori</button>
+    </div>
+}
+@if (editingNotesAppointment != null)
+{
+    <div class="modal-overlay" @onclick="CloseEditNotesModal"></div>
+    <div class="modal-content">
+        <h4>Uredi Napomenu</h4>
+        <textarea class="form-control" @bind="editingNotesAppointment.Notes"></textarea>
+        <br />
+        <button class="btn btn-primary" @onclick="SaveNotes">💾 Spremi</button>
+        <button class="btn btn-secondary" @onclick="CloseEditNotesModal">❌ Zatvori</button>
+    </div>
+}
+
+@code {
+    private string selectedService = "";
+    private string selectedEmployee = "";
+    private string nextAvailableSlot = "";
+    private bool searchedNextAvailable = false;
+    private bool searchedFilter = false;
+    private List<Appointment> allAppointments = new();
+    private List<Appointment> filteredAppointments = new();
+    private List<string> employees = new();
+    private string selectedFilter = "Name";
+    private string filterValue = "";
+    private DateTime lastCheckedTime;
+    private Appointment? selectedAppointment;
+    private Appointment? editingNotesAppointment;
+
+
+    private Dictionary<string, int> serviceDurations = new()
+    {
+        { "Šminkanje", 120 },
+        { "Lash Lift", 60 },
+        { "Brow Lift", 60 },
+        { "Ekstenzije trepavica", 90 }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        allAppointments = await AppointmentService.GetAppointmentsAsync();
+        employees = allAppointments.Select(a => a.CreatedBy).Distinct().ToList();
+        filteredAppointments.Clear();
+    }
+    private void ShowDetails(Appointment appointment)
+    {
+        selectedAppointment = appointment;
+    }
+
+    private void CloseDetails()
+    {
+        selectedAppointment = null;
+    }
+
+    private void OpenEditNotesModal(Appointment appointment)
+    {
+        editingNotesAppointment = new Appointment
+            {
+                Id = appointment.Id,
+                Notes = appointment.Notes
+            };
+    }
+
+    private void CloseEditNotesModal()
+    {
+        editingNotesAppointment = null;
+    }
+
+    private async Task SaveNotes()
+    {
+        if (editingNotesAppointment == null) return;
+
+        // Ensure Notes is never null before passing it to the method
+        string safeNotes = editingNotesAppointment.Notes ?? "";
+
+        bool success = await AppointmentService.UpdateAppointmentNotesAsync(editingNotesAppointment.Id, safeNotes);
+        if (success)
+        {
+            var appointmentToUpdate = filteredAppointments.FirstOrDefault(a => a.Id == editingNotesAppointment.Id);
+            if (appointmentToUpdate != null)
+            {
+                appointmentToUpdate.Notes = safeNotes;
+            }
+            CloseEditNotesModal();
+        }
+    }
+
+    private void FindNextAvailableSlot(bool isFirstSearch)
+    {
+        searchedNextAvailable = true;
+        nextAvailableSlot = "";
+
+        if (string.IsNullOrEmpty(selectedService) || string.IsNullOrEmpty(selectedEmployee))
+        {
+            return;
+        }
+
+        DateTime now = DateTime.Now;
+        DateTime today = now.Date;
+
+        if (isFirstSearch || lastCheckedTime == DateTime.MinValue)
+        {
+            lastCheckedTime = now.AddMinutes(15);
+        }
+        else
+        {
+            lastCheckedTime = lastCheckedTime.AddMinutes(15);
+        }
+
+        DateTime searchEnd = today.AddDays(7).AddHours(20);
+
+        int serviceDuration = serviceDurations.ContainsKey(selectedService) ? serviceDurations[selectedService] : 60;
+
+        var bookedTimes = allAppointments
+            .Where(a => a.AppointmentDateTime >= now && a.CreatedBy == selectedEmployee)
+            .OrderBy(a => a.AppointmentDateTime)
+            .Select(a => new
+            {
+                Start = a.AppointmentDateTime,
+                End = a.AppointmentDateTime.AddMinutes(serviceDurations.ContainsKey(a.ServiceType) ? serviceDurations[a.ServiceType] : 60)
+            })
+            .ToList();
+
+        for (DateTime day = lastCheckedTime.Date; day <= searchEnd.Date; day = day.AddDays(1))
+        {
+            if (day.DayOfWeek == DayOfWeek.Sunday) continue;
+
+            for (int hour = 8; hour <= 19; hour++)
+            {
+                DateTime possibleSlot = new DateTime(day.Year, day.Month, day.Day, hour, 0, 0);
+
+                if (possibleSlot < lastCheckedTime) continue;
+
+                DateTime possibleEnd = possibleSlot.AddMinutes(serviceDuration);
+
+                bool isAvailable = !bookedTimes.Any(b =>
+                    (possibleSlot >= b.Start && possibleSlot < b.End) ||
+                    (possibleEnd > b.Start && possibleEnd <= b.End) ||
+                    (possibleSlot <= b.Start && possibleEnd >= b.End)
+                );
+
+                if (isAvailable)
+                {
+                    nextAvailableSlot = possibleSlot.ToString("dd.MM.yyyy HH:mm");
+                    lastCheckedTime = possibleSlot;
+                    return;
+                }
+            }
+        }
+    }
+
+    private void FilterAppointments()
+    {
+        DateTime now = DateTime.Now;
+        searchedFilter = true;
+
+        if (string.IsNullOrWhiteSpace(filterValue))
+        {
+            filteredAppointments.Clear();
+        }
+        else
+        {
+            filteredAppointments = allAppointments
+                .Where(a => a.AppointmentDateTime >= now &&
+                    ((selectedFilter == "Name" && a.Name.Contains(filterValue, StringComparison.OrdinalIgnoreCase)) ||
+                    (selectedFilter == "ServiceType" && a.ServiceType.Contains(filterValue, StringComparison.OrdinalIgnoreCase)) ||
+                    (selectedFilter == "CreatedBy" && a.CreatedBy.Contains(filterValue, StringComparison.OrdinalIgnoreCase))))
+                .ToList();
+        }
+
+        StateHasChanged();
+    }
+
+    private void ResetFilter()
+    {
+        filterValue = "";
+        filteredAppointments.Clear();
+        searchedFilter = false;
+        StateHasChanged();
+    }
+}

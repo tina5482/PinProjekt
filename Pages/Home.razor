@@ -1,0 +1,17 @@
+﻿@page "/"
+@inherits LayoutComponentBase
+
+<AuthorizeView>
+    <Authorized>
+        @if (context.User.Identity?.Name != null)
+        {
+            var displayName = context.User.Identity.Name.Split('@')[0]; // Uzimamo samo dio prije @
+            <p>Dobrodosli, @displayName!</p>
+        }
+    </Authorized>
+    <NotAuthorized>
+        molimo ulogirajte se
+    </NotAuthorized>
+</AuthorizeView>
+
+
